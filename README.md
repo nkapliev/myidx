@@ -1,7 +1,7 @@
 # myidx  
 Naive text indexer that helps to find words in pre-indexed text files.  
-See Inverted Index problem at wiki: https://en.wikipedia.org/wiki/Inverted_index
-This demo project is an outcome of a homework interview task. (The end was happy and I got the job! 😎)  
+See Inverted Index problem at wiki: https://en.wikipedia.org/wiki/Inverted_index   
+This demo project is an outcome of a homework interview task. (The end was happy and I got the job! 😎)   
 
 Available commands:  
 
