@@ -1,0 +1,196 @@
+#!/usr/bin/env node
+var fs = require('fs'),
+    readline = require('readline');
+
+var FILES_INDEX_FILE = 'filesIndex.json',
+    WORDS_INDEX_FILE = 'wordsIndex.json';
+
+var Index = {
+
+    clean: function() {
+        try { fs.unlinkSync(FILES_INDEX_FILE); } catch (e) {}
+        try { fs.unlinkSync(WORDS_INDEX_FILE); } catch (e) {}
+
+        console.log('Index is clean');
+    },
+
+    'clean-help':
+        './myidx clean\n' +
+        '\n' +
+        'Clean the index',
+
+    /**
+     * @param {String[]} [files=process.argv.slice(3)]
+     */
+    index: function(files) {
+        files || (files = process.argv.slice(3));
+        Array.isArray(files) || (files = [ files ]);
+
+        if (files.length === 0) {
+            console.log('No files for build index');
+            console.log('Please try `./myidx help`');
+        }
+
+        var filesIndex,
+            wordsIndex,
+            readersCounter = 0;
+
+        try {
+            filesIndex = JSON.parse(fs.readFileSync(FILES_INDEX_FILE, { encoding: 'utf8' }));
+        } catch (e) {
+            filesIndex = [];
+        }
+
+        try {
+            wordsIndex = JSON.parse(fs.readFileSync(WORDS_INDEX_FILE, { encoding: 'utf8' }));
+        } catch(e) {
+            wordsIndex = {};
+        }
+
+        files.forEach(function(file) {
+            var fileStream,
+                fileIndex,
+                rl;
+
+            try {
+                fileStream = fs.createReadStream(file)
+            } catch(e) {
+                console.log(e);
+                console.log('Can\'t read file `%s`', file);
+
+                return;
+            }
+
+            if (filesIndex.indexOf(file) === -1) {
+                filesIndex.push(file);
+            }
+
+            fileIndex = filesIndex.indexOf(file);
+            rl = readline.createInterface({ input: fileStream });
+
+            readersCounter++;
+
+            rl
+                .on('line', function(line) {
+                    var words = line.match(/\w+/g);
+
+                    words && words.forEach(function(word) {
+                        if (wordsIndex.hasOwnProperty(word)) {
+                            if (wordsIndex[word].indexOf(fileIndex) === -1) {
+                                wordsIndex[word].push(fileIndex);
+                            }
+                        } else {
+                            wordsIndex[word] = [ fileIndex ];
+                        }
+                    });
+                })
+                .on('close', function() {
+                    console.log('Successfully build index for file `%s`', file);
+
+                    if ( ! --readersCounter) {
+                        try {
+                            fs.writeFileSync(FILES_INDEX_FILE, JSON.stringify(filesIndex));
+                            fs.writeFileSync(WORDS_INDEX_FILE, JSON.stringify(wordsIndex));
+
+                            console.log('Done');
+                        } catch (e) {
+                            console.log(e);
+                            console.log('Can\'t build index');
+                        }
+                    }
+                });
+        });
+        // TODO сохранять в filesIndex по более адекватному ключу: полный путь + дата последнего изменения / md5 хэш
+        // TODO Если файл не текстовый
+    },
+
+    /**
+     * @type {String}
+     */
+    'index-help':
+        './myidx index <file1>[ <file2> [...]]\n' +
+        '\n' +
+        'Build naively inverted index by text files passed as arguments. Save index in ./myidx dir\n' +
+        '\n' +
+        './myidx index /books/Book1.txt\n' +
+        './myidx index /books/Book1.txt /books/Book2.txt /books/Book3.txt\n',
+
+    /**
+     * @param {String[]} [words=process.argv.slice(3)]
+     */
+    search: function(words) {
+        words || (words = process.argv.slice(3));
+        Array.isArray(words) || (words = [ words ]);
+
+        if (words.length === 0) {
+            console.log('No words for search');
+            console.log('Please try `./myidx help`');
+        }
+
+        var filesIndex,
+            wordsIndex;
+
+        try {
+            filesIndex = JSON.parse(fs.readFileSync(FILES_INDEX_FILE, { encoding: 'utf8' }));
+        } catch (e) {
+            console.log('Can\'t read index file `%s`', FILES_INDEX_FILE);
+            console.log('Please try `./myidx help`');
+
+            return;
+        }
+
+        try {
+            wordsIndex = JSON.parse(fs.readFileSync(WORDS_INDEX_FILE, { encoding: 'utf8' }));
+        } catch(e) {
+            console.log('Can\'t read index file `%s`', WORDS_INDEX_FILE);
+            console.log('Please try `./myidx help`');
+
+            return;
+        }
+
+        words.forEach(function(word) {
+            console.log(word);
+
+            if (wordsIndex.hasOwnProperty(word) && Array.isArray(wordsIndex[word])) {
+                wordsIndex[word].forEach(function(fileIndex) {
+                    console.log(filesIndex[fileIndex]);
+                });
+            } else {
+                console.log('-');
+            }
+        });
+    },
+
+    'search-help':
+        './myidx search <word1>[ <word2> [...]]\n' +
+        '\n' +
+        'Trying to find indexes of words in indexed files. Use this command only after building indexes with `index` command\n' +
+        '\n' +
+        './myidx search Alice\n' +
+        './myidx search Bob Andrew Amadeus\n',
+
+    help: function() {
+        console.log('myidx is a naive text indexer that helps to find words in pre-indexed text files');
+        console.log('Available commands:\n');
+
+        Object.keys(Index)
+            .filter(function(key) {
+                return key.indexOf('-help') !== -1;
+            })
+            .forEach(function(key, i) {
+                console.log('---------');
+                console.log('%s. %s', ++i, key.split('-')[0]);
+                console.log(Index[key]);
+            });
+    }
+
+};
+
+var command = process.argv[2];
+
+if (Index.hasOwnProperty(command) && typeof Index[command] === 'function') {
+    Index[command]();
+} else {
+    command && console.log('There is no command `%s`', command);
+    console.log('Please try `./myidx help`');
+}
